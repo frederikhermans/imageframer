@@ -20,6 +20,8 @@ def create_marker(size):
 
 class Framer(object):
     def __init__(self, frame_shape, border_size):
+        if len(frame_shape) > 2:
+            frame_shape = frame_shape[:2]
         if frame_shape[0] != frame_shape[1]:
             raise ValueError('Frame must be square.')
 
@@ -49,7 +51,6 @@ class Framer(object):
         if self.circles_per_side < 2:
             # We need at least 2 markers per side
             raise ValueError('Border size too large.')
-        print self.circles_per_side
 
         # `fill` will be pasted into the corners.
         fill = np.ones((self.border_pixels, self.border_pixels), dtype=np.uint8)
@@ -83,6 +84,9 @@ class Framer(object):
         if frame.dtype != np.uint8:
             raise ValueError('Can only operate on uint8.')
         marked_frame = self.template.copy()
+        if len(frame.shape) == 3:
+            # Color frames need special treatment
+            marked_frame = np.dstack((marked_frame, )*frame.shape[2])
         frame_slice = (slice(self.border_pixels, -self.border_pixels),
                        slice(self.border_pixels, -self.border_pixels))
         marked_frame[frame_slice] = frame
