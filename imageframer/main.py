@@ -92,16 +92,9 @@ class Framer(object):
         marked_frame[frame_slice] = frame
         return marked_frame
 
-    def locate(self, img, debug=()):
-        """Returns the corners of a frame in `img`."""
-        if img.dtype != np.uint8:
-            raise ValueError('Can only operate on uint8 data.')
-
-        if isinstance(debug, basestring):
-            debug = (debug, )
-
+    def _find_markers(self, img, debug=()):
+        """Find circular markers in an image."""
         circles = contour.find_circles(img)
-
         # Cluster circles by their area
         area_clusters = cluster.compute_clusters(circles, 'area')
         if len(area_clusters) == 0:
@@ -129,8 +122,75 @@ class Framer(object):
         # Cluster markers by their location
         top, left, bottom, right = cluster.group_markers(markers,
                                                          self.circles_per_side)
+        return top, left, bottom, right
+
+    def _find_markers_with_hints(self, img, hints, debug=()):
+        def get_slice(contour):
+            rect = contour.boundingRect
+            pad_y = int(0.2*rect[3])
+            pad_x = int(0.2*rect[2])
+            offset = (rect[0]-pad_x, rect[1]-pad_y)
+            return offset, img[rect[1]-pad_y:rect[1]+rect[3]+pad_y,
+                               rect[0]-pad_x:rect[0]+rect[2]+pad_x]
+
+        res = list()
+        fail = False
+        for group in hints:
+            markers = list()
+            for x in group:
+                offset, sl = get_slice(x)
+                _, sl = cv2.threshold(sl, 128, 255, cv2.THRESH_BINARY)
+                contours, hierarchy = cv2.findContours(sl, cv2.RETR_CCOMP,
+                                                       cv2.CHAIN_APPROX_SIMPLE,
+                                                       None, None, offset)
+                for i in xrange(len(contours)):
+                    c = contour.Contour(contours[i])
+                    if c.is_circle():
+                        if hierarchy[0, i, 2] < 0:
+                            markers.append(c)
+            res.append(markers)
+            if len(markers) != 4:
+                fail = True
+                break
+
+        if 'markers' in debug:
+            extent = (0, img.shape[1], 0, img.shape[0])
+            plt.figure()
+            for color, markers in zip('gycm', res):
+                plt.imshow(_draw_contours(markers, img.shape, color),
+                           extent=extent)
+            plt.imshow(img, cmap=plt.cm.Greys_r, extent=extent, alpha=0.4,
+                       interpolation='nearest')
+
+        return res if not fail else None
+
+    def locate(self, img, debug=(), hints=None):
+        """Returns the corners of a frame in `img`."""
+        if img.dtype != np.uint8:
+            raise ValueError('Can only operate on uint8 data.')
+
+        if isinstance(debug, basestring):
+            debug = (debug, )
+
+        markers = None
+        # Try with hints
+        if hints is not None and len(hints) == 4:
+            markers = self._find_markers_with_hints(img, hints, debug=debug)
+
+        # Try without hints, if necessary
+        if markers is None:
+            # Do it the hard way.
+            markers = self._find_markers(img, debug=debug)
+
+        # Update hints
+        found_all = all(len(x) == self.circles_per_side for x in markers)
+        if found_all and hints is not None:
+            del hints[:]
+            hints.extend(markers)
+
         # Fit a line through each set of markers
         lines = list()
+        top, left, bottom, right = markers
         for ms in (top, left, bottom, right):
             centers = np.array([(m.centroid_y, m.centroid_x) for m in ms])
             lines.append(linetools.fit_line(centers))
@@ -161,12 +221,23 @@ class Framer(object):
         if corners is None:
             corners = self.locate(img)
 
+        # Crop image to corners
+        ys, xs = np.round(corners[:, 0]), np.round(corners[:, 1])
+        ystart = min(ys)
+        ystop = max(ys)
+        xstart = min(xs)
+        xstop = max(xs)
+        img = img[ystart:ystop, xstart:xstop]
+        corners -= (ystart, xstart)
+
+        # Compute perspective transform
         corners = np.fliplr(corners).astype(np.float32)
         dst_corners = np.array(output_shape) * ((0, 0), (1, 0), (1, 1), (0, 1))
         dst_corners = np.fliplr(dst_corners).astype(np.float32)
         m = cv2.getPerspectiveTransform(corners, dst_corners)
 
-        return cv2.warpPerspective(img, m, output_shape)
+        return cv2.warpPerspective(img, m, output_shape,
+                                   flags=cv2.INTER_NEAREST)
 
 
 def _draw_contours(contours, shape, color):
@@ -187,10 +258,9 @@ def _plot_result(img, top, left, bottom, right, intersections, corners):
     plt.figure()
     extent = (0, img.shape[1], img.shape[0], 0)
     plt.imshow(img, interpolation='nearest', cmap=plt.cm.Greys_r, extent=extent)
-    axis = plt.axis()
 
     for color, markers in zip('gycm', (top, left, bottom, right)):
-        plt.imshow(_draw_contours(markers, img.shape, color), alpha=0.4,
+        plt.imshow(_draw_contours(markers, img.shape, color), alpha=0.2,
                    interpolation='nearest', extent=extent)
         plt.scatter([m.centroid_x for m in markers],
                     [m.centroid_y for m in markers], color='r')
@@ -198,4 +268,8 @@ def _plot_result(img, top, left, bottom, right, intersections, corners):
     _plot_corners(intersections, color='r', marker='x')
     _plot_corners(corners, color='r', linestyle='--', marker='+')
 
-    plt.axis(axis)
+    pad = 40
+    plt.axis([min(m.centroid_x for m in left)-pad,
+              max(m.centroid_x for m in right)+pad,
+              max(m.centroid_y for m in bottom)+pad,
+              min(m.centroid_y for m in top)-pad])
