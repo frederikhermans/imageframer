@@ -1,7 +1,11 @@
 import cv2
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
+try:
+    import matplotlib
+    import matplotlib.pyplot as plt
+except ImportError:
+    import sys
+    sys.stderr.write('Could not find matplotlib. Debugging will crash.\n')
 
 from . import cluster
 from . import contour
@@ -142,7 +146,7 @@ class Framer(object):
                 _, sl = cv2.threshold(sl, 128, 255, cv2.THRESH_BINARY)
                 contours, hierarchy = cv2.findContours(sl, cv2.RETR_CCOMP,
                                                        cv2.CHAIN_APPROX_SIMPLE,
-                                                       None, None, offset)
+                                                       None, None, offset)[-2:]
                 for i in xrange(len(contours)):
                     c = contour.Contour(contours[i])
                     if c.is_circle():

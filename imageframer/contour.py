@@ -6,7 +6,7 @@ def find_circles(img):
     """Return contour objects for all circles in `img`"""
     _, biimg = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     contours, _ = cv2.findContours(biimg, cv2.RETR_LIST,
-                                   cv2.CHAIN_APPROX_NONE)
+                                   cv2.CHAIN_APPROX_NONE)[-2:]
     circles = [Contour(c) for c in contours]
     return [c for c in circles if c.is_circle()]
 
