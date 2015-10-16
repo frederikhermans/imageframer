@@ -176,6 +176,9 @@ class Framer(object):
         if isinstance(debug, basestring):
             debug = (debug, )
 
+        if len(img.shape) == 3:
+            img = img[:, :, 1]  # Select green channel
+
         markers = None
         # Try with hints
         if hints is not None and len(hints) == 4:
