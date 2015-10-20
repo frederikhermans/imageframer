@@ -1,4 +1,6 @@
 import collections
+import cPickle as pickle
+import os
 import sys
 
 import cv2
@@ -9,6 +11,38 @@ CalibrationSettings = collections.namedtuple('CalibrationSettings',
                                              ('camera_matrix', 'distort_coeffs',
                                               'optimal_camera',
                                               'area_threshold'))
+_cached_profiles = dict()
+
+
+def _profile_filename(profile_name):
+    return os.path.join(os.path.dirname(__file__), profile_name+'.pickle')
+
+
+def load_calibration_profile(profile_name):
+    global _cached_profiles
+    if profile_name not in _cached_profiles:
+        with open(_profile_filename(profile_name), 'rb') as fin:
+            _cached_profiles[profile_name] = pickle.load(fin)
+    return _cached_profiles[profile_name]
+
+
+def update_calibration_profile(profile_name, resolution, camera_matrix,
+                               distort_coeffs, optimal_camera, area_threshold):
+    try:
+        profile = load_calibration_profile(profile_name)
+    except IOError:
+        profile = dict()
+
+    settings = CalibrationSettings(camera_matrix=camera_matrix,
+                                   distort_coeffs=distort_coeffs,
+                                   optimal_camera=optimal_camera,
+                                   area_threshold=area_threshold)
+    profile[resolution] = settings
+
+    with open(_profile_filename(profile_name), 'wb') as fout:
+        pickle.dump(profile, fout, protocol=pickle.HIGHEST_PROTOCOL)
+
+    _cached_profiles[profile_name] = profile
 
 
 def _get_area(corners):
@@ -51,25 +85,31 @@ def test_uncrop():
         raise RuntimeError('Uncropped cropped image failed.')
 
 
-def should_undistort(img, corners, calibration):
+def should_undistort(img, corners, profile_name):
+    profile = load_calibration_profile(profile_name)
     img, corners = _uncrop(img, corners)
-    if img.shape[:2] not in calibration:
+    if img.shape[:2] not in profile:
         sys.stderr.write('WARNING: No calibration data for resolution '
                          '{}\n'.format(img.shape[:2]))
         return False
 
-    settings = calibration[img.shape[:2]]
+    settings = profile[img.shape[:2]]
     area = _get_area(corners)
     return area >= settings.area_threshold
 
 
-def undistort(img, corners, calibration):
+def undistort(img, corners, profile_name):
+    profile = load_calibration_profile(profile_name)
     img, corners = _uncrop(img, corners)
-    if img.shape[:2] not in calibration:
+    if len(img.shape) == 3:
+        # XXX Hack. Fix _uncrop!
+        img = img[:, :, 1]
+
+    if img.shape[:2] not in profile:
         raise ValueError('No calibration settings for input image size.')
 
-    settings = calibration[img.shape[:2]]
-    height, width = img.shape[2:]
+    settings = profile[img.shape[:2]]
+    height, width = img.shape[:2]
 
     # Undistort corners. OpenCV expects (x, y) and a 3D array.
     corners = np.array([np.fliplr(corners)])

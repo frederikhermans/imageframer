@@ -6,7 +6,6 @@
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import cPickle as pickle
 import os
 
 import numpy as np
@@ -15,7 +14,7 @@ import cv2
 from .. import undistort
 
 
-USAGE = ('USAGE: calib.py [--save <filename>] [--debug <output path>] '
+USAGE = ('USAGE: calib.py [--save <profilename>] [--debug <output path>] '
          '[--square_size] [--treshold <pixels>] [<image mask>]')
 
 
@@ -23,22 +22,6 @@ def splitfn(fn):
     path, fn = os.path.split(fn)
     name, ext = os.path.splitext(fn)
     return path, name, ext
-
-
-def save_result(filename, resolution, data):
-    try:
-        with open(filename, 'rb') as fin:
-            calibration = pickle.load(fin)
-    except IOError:
-        calibration = dict()
-
-    if resolution in calibration:
-        print('Overwriting calibration data for resolution {}x{}'.format(w, h))
-
-    calibration[resolution] = data
-
-    with open(filename, 'wb') as fout:
-        pickle.dump(calibration, fout, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == '__main__':
@@ -59,8 +42,8 @@ if __name__ == '__main__':
     debug_dir = args.get('--debug')
     square_size = float(args.get('--square_size', 1.0))
     threshold = args.get('--threshold', None)
-    out_pickle = args.get('--save', None)
-    if out_pickle and threshold is None:
+    profile_name = args.get('--save', None)
+    if profile_name and threshold is None:
         print('Cannot --save without --threshold.')
         sys.exit(-1)
 
@@ -107,9 +90,10 @@ if __name__ == '__main__':
     print("distortion coefficients: ", dist_coefs.ravel())
     cv2.destroyAllWindows()
 
-    if out_pickle:
-        settings = undistort.CalibrationSettings(camera_matrix=camera_matrix,
-                                                 optimal_camera=newcamera,
-                                                 distort_coeffs=dist_coefs,
-                                                 area_threshold=threshold)
-        save_result(out_pickle, (h, w), settings)
+    if profile_name:
+        undistort.update_calibration_profile(profile_name,
+                                             resolution=(h, w),
+                                             camera_matrix=camera_matrix,
+                                             optimal_camera=newcamera,
+                                             distort_coeffs=dist_coefs,
+                                             area_threshold=int(threshold))

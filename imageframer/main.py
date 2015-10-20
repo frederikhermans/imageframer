@@ -35,7 +35,7 @@ def create_marker(size):
 
 
 class Framer(object):
-    def __init__(self, frame_shape, border_size, calibration=None):
+    def __init__(self, frame_shape, border_size, calibration_profile=None):
         if len(frame_shape) > 2:
             frame_shape = frame_shape[:2]
         if frame_shape[0] != frame_shape[1]:
@@ -47,7 +47,7 @@ class Framer(object):
         self.frame_shape = frame_shape
         self._init_template()
 
-        self.calibration = calibration
+        self.calibration_profile = calibration_profile
 
     def _init_template(self, draw_cross=False):
         """Construct a template for adding markers to a frame."""
@@ -245,9 +245,10 @@ class Framer(object):
         if corners is None:
             corners = self.locate(img)
 
-        if self.calibration and \
-           undistort.should_undistort(img, corners, self.calibration):
-            img, corners = undistort.undistort(img, corners, self.calibration)
+        if self.calibration_profile is not None and \
+           undistort.should_undistort(img, corners, self.calibration_profile):
+            img, corners = undistort.undistort(img, corners,
+                                               self.calibration_profile)
 
         # Crop image to corners (speeds up the perspective transform)
         img, corners = crop_to_corners(img, corners)
