@@ -10,6 +10,18 @@ except ImportError:
 from . import cluster
 from . import contour
 from . import linetools
+from . import undistort
+
+
+def crop_to_corners(img, corners):
+    ys, xs = np.round(corners[:, 0]), np.round(corners[:, 1])
+    ystart = min(ys)
+    ystop = max(ys)
+    xstart = min(xs)
+    xstop = max(xs)
+    img = img[ystart:ystop, xstart:xstop]
+    corners -= (ystart, xstart)
+    return img, corners
 
 
 def create_marker(size):
@@ -23,7 +35,7 @@ def create_marker(size):
 
 
 class Framer(object):
-    def __init__(self, frame_shape, border_size):
+    def __init__(self, frame_shape, border_size, calibration=None):
         if len(frame_shape) > 2:
             frame_shape = frame_shape[:2]
         if frame_shape[0] != frame_shape[1]:
@@ -34,6 +46,8 @@ class Framer(object):
             self.border_pixels += 1
         self.frame_shape = frame_shape
         self._init_template()
+
+        self.calibration = calibration
 
     def _init_template(self, draw_cross=False):
         """Construct a template for adding markers to a frame."""
@@ -222,20 +236,21 @@ class Framer(object):
         return corners
 
     def extract(self, img, output_shape, corners=None):
-        """Extract a frame from `img` and correct perspective distortion."""
+        """Extract a frame from `img`.
+
+        This function always corrects for perspective distortion and may
+        correct for radial distortion."""
         if img.dtype != np.uint8:
             raise ValueError('Can only operate on uint8.')
         if corners is None:
             corners = self.locate(img)
 
-        # Crop image to corners
-        ys, xs = np.round(corners[:, 0]), np.round(corners[:, 1])
-        ystart = min(ys)
-        ystop = max(ys)
-        xstart = min(xs)
-        xstop = max(xs)
-        img = img[ystart:ystop, xstart:xstop]
-        corners -= (ystart, xstart)
+        if self.calibration and \
+           undistort.should_undistort(img, corners, self.calibration):
+            img, corners = undistort.undistort(img, corners, self.calibration)
+
+        # Crop image to corners (speeds up the perspective transform)
+        img, corners = crop_to_corners(img, corners)
 
         # Compute perspective transform
         corners = np.fliplr(corners).astype(np.float32)
