@@ -28,7 +28,7 @@ def _uncrop(img, corners):
 
     base_slice = get_base_slice(img)
     img = img.base
-    corners += (base_slice[0].start, base_slice[1].start)
+    corners = corners.copy() + (base_slice[0].start, base_slice[1].start)
 
     return img, corners
 
