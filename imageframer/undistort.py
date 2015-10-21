@@ -6,6 +6,8 @@ import sys
 import cv2
 import numpy as np
 
+from .log import log
+
 
 CalibrationSettings = collections.namedtuple('CalibrationSettings',
                                              ('camera_matrix', 'distort_coeffs',
@@ -95,6 +97,9 @@ def should_undistort(img, corners, profile_name):
 
     settings = profile[img.shape[:2]]
     area = _get_area(corners)
+    log_fmt = 'should_undistort={} (area={}, threshold={}).'
+    log.debug(log_fmt.format(area >= settings.area_threshold, area,
+                             settings.area_threshold))
     return area >= settings.area_threshold
 
 
@@ -121,6 +126,9 @@ def undistort(img, corners, profile_name):
     undist_img = cv2.undistort(img, settings.camera_matrix,
                                settings.distort_coeffs, None,
                                settings.optimal_camera)
+
+    log.debug('Undistorted image, shape={}, calibration_profile={}'.format(
+              img.shape, profile_name))
 
     return undist_img, undist_corners
 
