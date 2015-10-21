@@ -119,13 +119,12 @@ def undistort(img, corners, profile_name):
     # Undistort corners. OpenCV expects (x, y) and a 3D array.
     corners = np.array([np.fliplr(corners)])
     undist_corners = cv2.undistortPoints(corners, settings.camera_matrix,
-                                         settings.distort_coeffs, None, None,
-                                         settings.optimal_camera)
+                                         settings.distort_coeffs,
+                                         P=settings.camera_matrix)
     undist_corners = np.fliplr(undist_corners[0])
 
     undist_img = cv2.undistort(img, settings.camera_matrix,
-                               settings.distort_coeffs, None,
-                               settings.optimal_camera)
+                               settings.distort_coeffs)
 
     log.debug('Undistorted image, shape={}, calibration_profile={}'.format(
               img.shape, profile_name))
