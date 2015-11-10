@@ -230,6 +230,12 @@ class Framer(object):
         frame_corners = self.frame_corners.astype(np.float32).reshape(1, 4, 2)
         corners = cv2.perspectiveTransform(frame_corners, m)[0]
 
+        # Validate corners
+        if any(corners.reshape(-1) < 0) or \
+           any(corners[:, 1] > img.shape[1]) or \
+           any(corners[:, 0] > img.shape[0]):
+            raise ValueError('Corners outside image boundaries.')
+
         if 'result' in debug:
             _plot_result(img, top, left, bottom, right, intersections, corners)
 
