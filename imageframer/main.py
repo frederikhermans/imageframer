@@ -147,9 +147,14 @@ class Framer(object):
             rect = contour.boundingRect
             pad_y = int(0.2*rect[3])
             pad_x = int(0.2*rect[2])
-            offset = (rect[0]-pad_x, rect[1]-pad_y)
-            return offset, img[rect[1]-pad_y:rect[1]+rect[3]+pad_y,
-                               rect[0]-pad_x:rect[0]+rect[2]+pad_x]
+
+            ystart = max(0, rect[1]-pad_y)
+            yend = min(img.shape[0], rect[1]+rect[3]+pad_y)
+            xstart = max(0, rect[0]-pad_x)
+            xend = min(img.shape[1], rect[0]+rect[2]+pad_x)
+
+            offset = (xstart, ystart)
+            return offset, img[ystart:yend, xstart:xend]
 
         res = list()
         fail = False
