@@ -246,7 +246,7 @@ class Framer(object):
 
         return corners
 
-    def extract(self, img, output_shape, corners=None):
+    def extract(self, img, output_shape, corners=None, hints=None):
         """Extract a frame from `img`.
 
         This function always corrects for perspective distortion and may
@@ -254,12 +254,13 @@ class Framer(object):
         if img.dtype != np.uint8:
             raise ValueError('Can only operate on uint8.')
         if corners is None:
-            corners = self.locate(img)
+            corners = self.locate(img, hints=hints)
 
         if self.calibration_profile is not None and \
            undistort.should_undistort(img, corners, self.calibration_profile):
             img, corners = undistort.undistort(img, corners,
                                                self.calibration_profile)
+            corners = self.locate(img, hints=hints)
 
         # Crop image to corners (speeds up the perspective transform)
         img, corners = crop_to_corners(img, corners)
